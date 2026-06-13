@@ -1,0 +1,196 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum WorkflowStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ExecutionStatus {
+  PENDING
+  RUNNING
+  PAUSED
+  COMPLETED
+  FAILED
+  STOPPED
+}
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+  BUDGET
+  SPIKE
+  ANOMALY
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  name          String
+  avatar        String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  memberships   TeamMember[]
+  workflows     Workflow[]
+  comments      Comment[]
+  activities    Activity[]
+  notifications Notification[]
+  apiKeys       ApiKey[]
+}
+
+model Workspace {
+  id          String       @id @default(cuid())
+  name        String
+  slug        String       @unique
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  members     TeamMember[]
+  workflows   Workflow[]
+  agents      Agent[]
+  budgetLimit Float        @default(1000)
+  budgetUsed  Float        @default(0)
+}
+
+model TeamMember {
+  id          String    @id @default(cuid())
+  role        Role      @default(VIEWER)
+  userId      String
+  workspaceId String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@unique([userId, workspaceId])
+}
+
+model Agent {
+  id          String     @id @default(cuid())
+  name        String
+  description String?
+  icon        String?
+  workspaceId String
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workflowId  String?    @unique
+  workflow    Workflow?  @relation(fields: [workflowId], references: [id])
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  executions  Execution[]
+}
+
+model Workflow {
+  id          String         @id @default(cuid())
+  name        String
+  description String?
+  status      WorkflowStatus @default(DRAFT)
+  nodes       String         @default("[]")
+  edges       String         @default("[]")
+  viewport    String         @default("{}")
+  version     Int            @default(1)
+  userId      String
+  workspaceId String
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  agent       Agent?
+  executions  Execution[]
+  comments    Comment[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model Execution {
+  id           String          @id @default(cuid())
+  status       ExecutionStatus @default(PENDING)
+  workflowId   String
+  agentId      String?
+  inputTokens  Int             @default(0)
+  outputTokens Int             @default(0)
+  totalCost    Float           @default(0)
+  duration     Int             @default(0)
+  logs         String          @default("[]")
+  nodeResults  String          @default("[]")
+  workflow     Workflow        @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  agent        Agent?          @relation(fields: [agentId], references: [id])
+  createdAt    DateTime        @default(now())
+  completedAt  DateTime?
+}
+
+model Comment {
+  id         String   @id @default(cuid())
+  content    String
+  mentions   String   @default("[]")
+  workflowId String
+  userId     String
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  action    String
+  entity    String
+  entityId  String
+  metadata  String   @default("{}")
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model MarketplaceTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  category    String
+  icon        String
+  rating      Float    @default(4.5)
+  downloads   Int      @default(0)
+  nodes       String
+  edges       String
+  featured    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  name      String
+  provider  String
+  keyHash   String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model CostRecord {
+  id        String   @id @default(cuid())
+  provider  String
+  model     String
+  tokens    Int
+  cost      Float
+  date      DateTime @default(now())
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  title     String
+  message   String
+  type      NotificationType @default(INFO)
+  read      Boolean          @default(false)
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime         @default(now())
+}
